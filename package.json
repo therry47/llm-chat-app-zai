@@ -32,5 +32,8 @@
 		"dev": "wrangler dev",
 		"start": "wrangler dev",
 		"test": "vitest"
+	},
+	"dependencies": {
+		"openai": "^6.17.0"
 	}
 }

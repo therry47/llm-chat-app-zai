@@ -1,17 +1,19 @@
 /**
  * LLM Chat Application Template
  *
- * A simple chat application using Cloudflare Workers AI.
+ * A simple chat application using OpenAI API.
  * This template demonstrates how to implement an LLM-powered chat interface with
  * streaming responses using Server-Sent Events (SSE).
  *
  * @license MIT
  */
+import OpenAI from "openai";
 import { Env, ChatMessage } from "./types";
 
-// Model ID for Workers AI model
-// https://developers.cloudflare.com/workers-ai/models/
-const MODEL_ID = "@cf/meta/llama-3.1-8b-instruct-fp8";
+// OpenAI API Configuration
+const OPENAI_API_BASE = "https://api.z.ai/api/coding/paas/v4";
+const OPENAI_API_KEY = "8e8739cde3d64a5785677c21c8743aa0.l1wPaX8Ukl2dB7ib";
+const MODEL_ID = "gpt-3.5-turbo";
 
 // Default system prompt
 const SYSTEM_PROMPT =
@@ -67,24 +69,40 @@ async function handleChatRequest(
 			messages.unshift({ role: "system", content: SYSTEM_PROMPT });
 		}
 
-		const stream = await env.AI.run(
-			MODEL_ID,
-			{
-				messages,
-				max_tokens: 1024,
-				stream: true,
-			},
-			{
-				// Uncomment to use AI Gateway
-				// gateway: {
-				//   id: "YOUR_GATEWAY_ID", // Replace with your AI Gateway ID
-				//   skipCache: false,      // Set to true to bypass cache
-				//   cacheTtl: 3600,        // Cache time-to-live in seconds
-				// },
-			},
-		);
+		// Initialize OpenAI client
+		const openai = new OpenAI({
+			apiKey: OPENAI_API_KEY,
+			baseURL: OPENAI_API_BASE,
+		});
 
-		return new Response(stream, {
+		// Create streaming chat completion
+		const stream = await openai.chat.completions.create({
+			model: MODEL_ID,
+			messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
+			max_tokens: 1024,
+			stream: true,
+		});
+
+		// Convert OpenAI stream to SSE format
+		const encoder = new TextEncoder();
+		const readable = new ReadableStream({
+			async start(controller) {
+				try {
+					for await (const chunk of stream) {
+						const content = chunk.choices[0]?.delta?.content || "";
+						if (content) {
+							const data = `data: ${JSON.stringify({ response: content })}\n\n`;
+							controller.enqueue(encoder.encode(data));
+						}
+					}
+					controller.close();
+				} catch (error) {
+					controller.error(error);
+				}
+			},
+		});
+
+		return new Response(readable, {
 			headers: {
 				"content-type": "text/event-stream; charset=utf-8",
 				"cache-control": "no-cache",
