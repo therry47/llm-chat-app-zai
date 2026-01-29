@@ -68,18 +68,35 @@ async function handleChatRequest(
 			messages.unshift({ role: "system", content: SYSTEM_PROMPT });
 		}
 
+		// Validate API key is configured
+		const apiKey = env.Z_AI_API_KEY;
+		if (!apiKey || apiKey.trim() === "") {
+			return new Response(
+				JSON.stringify({ error: "Server configuration error: Z_AI_API_KEY is not set" }),
+				{
+					status: 500,
+					headers: { "content-type": "application/json" },
+				},
+			);
+		}
+
 		// Initialize OpenAI client with API key from environment
 		const openai = new OpenAI({
-			apiKey: env.Z_AI_API_KEY,
+			apiKey,
 			baseURL: OPENAI_API_BASE,
 		});
 
+		// Create AbortController for cleanup on client disconnect
+		const abortController = new AbortController();
+		
 		// Create streaming chat completion
 		const stream = await openai.chat.completions.create({
 			model: MODEL_ID,
 			messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
 			max_tokens: 1024,
 			stream: true,
+		}, {
+			signal: abortController.signal,
 		});
 
 		// Convert OpenAI stream to SSE format
@@ -108,6 +125,10 @@ async function handleChatRequest(
 				} catch (error) {
 					controller.error(error);
 				}
+			},
+			cancel() {
+				// Cleanup: abort upstream request when client disconnects
+				abortController.abort();
 			},
 		});
 

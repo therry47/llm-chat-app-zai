@@ -80,19 +80,89 @@ function parseMarkdown(text) {
 		return '<a href="' + safeUrl + '" target="_blank" rel="noopener noreferrer">' + text + "</a>";
 	});
 	
-	// Unordered lists
-	html = html.replace(/^\* (.+)$/gim, '<li>$1</li>');
-	html = html.replace(/^- (.+)$/gim, '<li>$1</li>');
-	html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+	// Process lists (grouping consecutive items)
+	var lines = html.split('\n');
+	var result = [];
+	var inUl = false;
+	var inOl = false;
 	
-	// Ordered lists
-	html = html.replace(/^\d+\. (.+)$/gim, '<li>$1</li>');
+	for (var i = 0; i < lines.length; i++) {
+		var line = lines[i];
+		var isUlItem = /^[*-] (.+)$/.test(line);
+		var isOlItem = /^\d+\. (.+)$/.test(line);
+		
+		if (isUlItem) {
+			if (!inUl) {
+				result.push('<ul>');
+				inUl = true;
+			}
+			result.push(line.replace(/^[*-] (.+)$/, '<li>$1</li>'));
+		} else if (isOlItem) {
+			if (!inOl) {
+				result.push('<ol>');
+				inOl = true;
+			}
+			result.push(line.replace(/^\d+\. (.+)$/, '<li>$1</li>'));
+		} else {
+			if (inUl) {
+				result.push('</ul>');
+				inUl = false;
+			}
+			if (inOl) {
+				result.push('</ol>');
+				inOl = false;
+			}
+			result.push(line);
+		}
+	}
+	
+	// Close any open lists
+	if (inUl) result.push('</ul>');
+	if (inOl) result.push('</ol>');
+	
+	html = result.join('\n');
 	
 	// Blockquotes
 	html = html.replace(/^> (.+)$/gim, '<blockquote>$1</blockquote>');
 	
-	// Line breaks
-	html = html.replace(/\n/g, '<br>');
+	// Line breaks - only outside code blocks and lists
+	function replaceNewlinesOutsideBlocks(htmlContent) {
+		var segments = [];
+		var blockRegex = /(<pre><code>[\s\S]*?<\/code><\/pre>|<ul>[\s\S]*?<\/ul>|<ol>[\s\S]*?<\/ol>)/g;
+		var lastIndex = 0;
+		var match;
+
+		while ((match = blockRegex.exec(htmlContent)) !== null) {
+			if (match.index > lastIndex) {
+				segments.push({
+					text: htmlContent.slice(lastIndex, match.index),
+					safe: false,
+				});
+			}
+			segments.push({
+				text: match[0],
+				safe: true,
+			});
+			lastIndex = blockRegex.lastIndex;
+		}
+
+		if (lastIndex < htmlContent.length) {
+			segments.push({
+				text: htmlContent.slice(lastIndex),
+				safe: false,
+			});
+		}
+
+		return segments
+			.map(function(segment) {
+				return segment.safe
+					? segment.text
+					: segment.text.replace(/\n/g, "<br>");
+			})
+			.join("");
+	}
+
+	html = replaceNewlinesOutsideBlocks(html);
 	
 	return html;
 }
@@ -151,14 +221,14 @@ async function sendMessage() {
 		thinkingSection.className = "thinking-section";
 		thinkingSection.style.display = "none";
 		thinkingSection.innerHTML = `
-			<div class="thinking-header">
+			<button class="thinking-header" aria-expanded="false" aria-controls="thinking-content-${Date.now()}">
 				<div class="thinking-title">
 					<span>💭</span>
 					<span>Thinking process</span>
 				</div>
 				<span class="thinking-toggle">▼</span>
-			</div>
-			<div class="thinking-content"></div>
+			</button>
+			<div class="thinking-content" id="thinking-content-${Date.now()}"></div>
 		`;
 		
 		// Create response container (for markdown)
@@ -174,10 +244,11 @@ async function sendMessage() {
 		const thinkingToggleEl = thinkingSection.querySelector(".thinking-toggle");
 		const thinkingHeaderEl = thinkingSection.querySelector(".thinking-header");
 		
-		// Add click handler for collapsing/expanding thinking
+		// Add click handler for collapsing/expanding thinking with accessibility
 		thinkingHeaderEl.addEventListener("click", () => {
-			thinkingContentEl.classList.toggle("collapsed");
+			const isCollapsed = thinkingContentEl.classList.toggle("collapsed");
 			thinkingToggleEl.classList.toggle("collapsed");
+			thinkingHeaderEl.setAttribute("aria-expanded", !isCollapsed);
 		});
 		
 		// Start with thinking collapsed
@@ -212,9 +283,21 @@ async function sendMessage() {
 		let responseText = "";
 		let thinkingText = "";
 		let buffer = "";
+		let lastRenderTime = 0;
+		const RENDER_THROTTLE_MS = 50; // Throttle rendering to ~20fps
+		
 		const flushAssistantText = () => {
+			const now = Date.now();
+			if (now - lastRenderTime >= RENDER_THROTTLE_MS) {
+				responseContainer.innerHTML = parseMarkdown(responseText);
+				chatMessages.scrollTop = chatMessages.scrollHeight;
+				lastRenderTime = now;
+			}
+		};
+		const flushAssistantTextImmediate = () => {
 			responseContainer.innerHTML = parseMarkdown(responseText);
 			chatMessages.scrollTop = chatMessages.scrollHeight;
+			lastRenderTime = Date.now();
 		};
 		const flushThinkingText = () => {
 			thinkingContentEl.textContent = thinkingText;
@@ -306,6 +389,9 @@ async function sendMessage() {
 				break;
 			}
 		}
+
+		// Final render with complete content
+		flushAssistantTextImmediate();
 
 		// Add completed response to chat history
 		if (responseText.length > 0) {
