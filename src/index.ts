@@ -19,6 +19,12 @@ const MODEL_ID = "gpt-3.5-turbo";
 const SYSTEM_PROMPT =
 	"You are a helpful, friendly assistant. Provide concise and accurate responses.";
 
+// Initialize OpenAI client (singleton)
+const openai = new OpenAI({
+	apiKey: OPENAI_API_KEY,
+	baseURL: OPENAI_API_BASE,
+});
+
 export default {
 	/**
 	 * Main request handler for the Worker
@@ -68,12 +74,6 @@ async function handleChatRequest(
 		if (!messages.some((msg) => msg.role === "system")) {
 			messages.unshift({ role: "system", content: SYSTEM_PROMPT });
 		}
-
-		// Initialize OpenAI client
-		const openai = new OpenAI({
-			apiKey: OPENAI_API_KEY,
-			baseURL: OPENAI_API_BASE,
-		});
 
 		// Create streaming chat completion
 		const stream = await openai.chat.completions.create({
