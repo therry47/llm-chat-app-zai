@@ -59,7 +59,26 @@ function parseMarkdown(text) {
 	html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
 	
 	// Links
-	html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+	html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (match, text, url) {
+		// Sanitize URL: allow http, https, mailto, relative and hash links
+		var trimmedUrl = (url || "").trim();
+		var lowerUrl = trimmedUrl.toLowerCase();
+		
+		var isAllowedScheme =
+			lowerUrl.startsWith("http://") ||
+			lowerUrl.startsWith("https://") ||
+			lowerUrl.startsWith("mailto:");
+		
+		var isRelativeOrHash =
+			trimmedUrl.startsWith("/") ||
+			trimmedUrl.startsWith("#") ||
+			// No colon means no explicit scheme (e.g., "path/to/page")
+			trimmedUrl.indexOf(":") === -1;
+		
+		var safeUrl = (isAllowedScheme || isRelativeOrHash) ? trimmedUrl : "#";
+		
+		return '<a href="' + safeUrl + '" target="_blank" rel="noopener noreferrer">' + text + "</a>";
+	});
 	
 	// Unordered lists
 	html = html.replace(/^\* (.+)$/gim, '<li>$1</li>');
