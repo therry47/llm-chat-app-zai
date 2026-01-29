@@ -14,9 +14,16 @@ import { Env, ChatMessage } from "./types";
 const OPENAI_API_BASE = "https://api.z.ai/api/coding/paas/v4";
 const MODEL_ID = "glm-4.7";
 
-// Default system prompt
+// Default system prompt - not used anymore, replaced by tone-specific prompts
 const SYSTEM_PROMPT =
 	"You are a helpful, friendly assistant. Provide concise and accurate responses.";
+
+// Tone-specific system prompts
+const TONE_PROMPTS = {
+	friendly: "You are a warm, friendly, and enthusiastic assistant. Use a casual, upbeat tone with emojis and encouraging language. Provide helpful responses in a cheerful manner.",
+	rude: "You are a blunt, sarcastic assistant. Be direct and somewhat dismissive in your responses, but still provide accurate information. Use a condescending tone.",
+	professional: "You are a formal, professional assistant. Provide precise, well-structured responses using formal language. Be thorough and maintain a business-like tone."
+};
 
 export default {
 	/**
@@ -51,7 +58,7 @@ export default {
 } satisfies ExportedHandler<Env>;
 
 /**
- * Handles chat API requests
+ * Handles chat API requests - sends 3 concurrent requests with different tones
  */
 async function handleChatRequest(
 	request: Request,
@@ -63,10 +70,8 @@ async function handleChatRequest(
 			messages: ChatMessage[];
 		};
 
-		// Add system prompt if not present
-		if (!messages.some((msg) => msg.role === "system")) {
-			messages.unshift({ role: "system", content: SYSTEM_PROMPT });
-		}
+		// Remove any existing system prompts from user messages
+		const userMessages = messages.filter((msg) => msg.role !== "system");
 
 		// Validate API key is configured
 		const apiKey = env.Z_AI_API_KEY;
@@ -89,38 +94,55 @@ async function handleChatRequest(
 		// Create AbortController for cleanup on client disconnect
 		const abortController = new AbortController();
 		
-		// Create streaming chat completion
-		const stream = await openai.chat.completions.create({
-			model: MODEL_ID,
-			messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
-			max_tokens: 1024,
-			stream: true,
-		}, {
-			signal: abortController.signal,
+		// Create 3 concurrent streaming requests with different tones
+		const tones = ['friendly', 'rude', 'professional'] as const;
+		const streamPromises = tones.map(async (tone) => {
+			const messagesWithTone = [
+				{ role: "system" as const, content: TONE_PROMPTS[tone] },
+				...userMessages
+			];
+			
+			return {
+				tone,
+				stream: await openai.chat.completions.create({
+					model: MODEL_ID,
+					messages: messagesWithTone as OpenAI.Chat.ChatCompletionMessageParam[],
+					max_tokens: 1024,
+					stream: true,
+				}, {
+					signal: abortController.signal,
+				})
+			};
 		});
 
-		// Convert OpenAI stream to SSE format
+		// Wait for all streams to be created
+		const streams = await Promise.all(streamPromises);
+
+		// Convert OpenAI streams to SSE format - multiplex all 3 streams
 		const encoder = new TextEncoder();
 		const readable = new ReadableStream({
 			async start(controller) {
 				try {
-					for await (const chunk of stream) {
-						const delta = chunk.choices[0]?.delta as any;
-						
-						// Handle thinking content (reasoning tokens)
-						const thinking = delta?.reasoning_content || "";
-						if (thinking) {
-							const data = `data: ${JSON.stringify({ thinking: thinking })}\n\n`;
-							controller.enqueue(encoder.encode(data));
+					// Process all 3 streams concurrently
+					await Promise.all(streams.map(async ({ tone, stream }) => {
+						for await (const chunk of stream) {
+							const delta = chunk.choices[0]?.delta as any;
+							
+							// Handle thinking content (reasoning tokens)
+							const thinking = delta?.reasoning_content || "";
+							if (thinking) {
+								const data = `data: ${JSON.stringify({ tone, thinking: thinking })}\n\n`;
+								controller.enqueue(encoder.encode(data));
+							}
+							
+							// Handle regular response content
+							const content = delta?.content || "";
+							if (content) {
+								const data = `data: ${JSON.stringify({ tone, response: content })}\n\n`;
+								controller.enqueue(encoder.encode(data));
+							}
 						}
-						
-						// Handle regular response content
-						const content = delta?.content || "";
-						if (content) {
-							const data = `data: ${JSON.stringify({ response: content })}\n\n`;
-							controller.enqueue(encoder.encode(data));
-						}
-					}
+					}));
 					controller.close();
 				} catch (error) {
 					controller.error(error);

@@ -212,48 +212,78 @@ async function sendMessage() {
 	chatHistory.push({ role: "user", content: message });
 
 	try {
-		// Create new assistant response element
-		const assistantMessageEl = document.createElement("div");
-		assistantMessageEl.className = "message assistant-message";
+		// Create container for all 3 responses
+		const responsesContainer = document.createElement("div");
+		responsesContainer.className = "multi-response-container";
+		chatMessages.appendChild(responsesContainer);
 		
-		// Create thinking section (initially hidden)
-		const thinkingSection = document.createElement("div");
-		thinkingSection.className = "thinking-section";
-		thinkingSection.style.display = "none";
-		thinkingSection.innerHTML = `
-			<button class="thinking-header" aria-expanded="false" aria-controls="thinking-content-${Date.now()}">
-				<div class="thinking-title">
-					<span>💭</span>
-					<span>Thinking process</span>
-				</div>
-				<span class="thinking-toggle">▼</span>
-			</button>
-			<div class="thinking-content" id="thinking-content-${Date.now()}"></div>
-		`;
+		// Create 3 response elements (one for each tone)
+		const tones = ['friendly', 'rude', 'professional'];
+		const responseElements = {};
 		
-		// Create response container (for markdown)
-		const responseContainer = document.createElement("div");
-		responseContainer.className = "response-content";
-		
-		// Assemble message
-		assistantMessageEl.appendChild(thinkingSection);
-		assistantMessageEl.appendChild(responseContainer);
-		chatMessages.appendChild(assistantMessageEl);
-		
-		const thinkingContentEl = thinkingSection.querySelector(".thinking-content");
-		const thinkingToggleEl = thinkingSection.querySelector(".thinking-toggle");
-		const thinkingHeaderEl = thinkingSection.querySelector(".thinking-header");
-		
-		// Add click handler for collapsing/expanding thinking with accessibility
-		thinkingHeaderEl.addEventListener("click", () => {
-			const isCollapsed = thinkingContentEl.classList.toggle("collapsed");
-			thinkingToggleEl.classList.toggle("collapsed");
-			thinkingHeaderEl.setAttribute("aria-expanded", !isCollapsed);
+		tones.forEach((tone) => {
+			const toneContainer = document.createElement("div");
+			toneContainer.className = `tone-response ${tone}-response`;
+			
+			// Add header for each tone
+			const header = document.createElement("div");
+			header.className = "tone-header";
+			const toneLabels = {
+				friendly: "😊 Friendly",
+				rude: "😤 Rude", 
+				professional: "💼 Professional"
+			};
+			header.textContent = toneLabels[tone];
+			toneContainer.appendChild(header);
+			
+			// Create thinking section
+			const thinkingSection = document.createElement("div");
+			thinkingSection.className = "thinking-section";
+			thinkingSection.style.display = "none";
+			thinkingSection.innerHTML = `
+				<button class="thinking-header" aria-expanded="false" aria-controls="thinking-content-${tone}-${Date.now()}">
+					<div class="thinking-title">
+						<span>💭</span>
+						<span>Thinking process</span>
+					</div>
+					<span class="thinking-toggle">▼</span>
+				</button>
+				<div class="thinking-content" id="thinking-content-${tone}-${Date.now()}"></div>
+			`;
+			
+			// Create response container
+			const responseContainer = document.createElement("div");
+			responseContainer.className = "response-content";
+			
+			// Assemble tone container
+			toneContainer.appendChild(thinkingSection);
+			toneContainer.appendChild(responseContainer);
+			responsesContainer.appendChild(toneContainer);
+			
+			const thinkingContentEl = thinkingSection.querySelector(".thinking-content");
+			const thinkingToggleEl = thinkingSection.querySelector(".thinking-toggle");
+			const thinkingHeaderEl = thinkingSection.querySelector(".thinking-header");
+			
+			// Add click handler for collapsing/expanding thinking
+			thinkingHeaderEl.addEventListener("click", () => {
+				const isCollapsed = thinkingContentEl.classList.toggle("collapsed");
+				thinkingToggleEl.classList.toggle("collapsed");
+				thinkingHeaderEl.setAttribute("aria-expanded", !isCollapsed);
+			});
+			
+			// Start with thinking collapsed
+			thinkingContentEl.classList.add("collapsed");
+			thinkingToggleEl.classList.add("collapsed");
+			
+			// Store references for this tone
+			responseElements[tone] = {
+				responseContainer,
+				thinkingSection,
+				thinkingContentEl,
+				responseText: "",
+				thinkingText: ""
+			};
 		});
-		
-		// Start with thinking collapsed
-		thinkingContentEl.classList.add("collapsed");
-		thinkingToggleEl.classList.add("collapsed");
 
 		// Scroll to bottom
 		chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -280,30 +310,31 @@ async function sendMessage() {
 		// Process streaming response
 		const reader = response.body.getReader();
 		const decoder = new TextDecoder();
-		let responseText = "";
-		let thinkingText = "";
 		let buffer = "";
 		let lastRenderTime = 0;
 		const RENDER_THROTTLE_MS = 50; // Throttle rendering to ~20fps
 		
-		const flushAssistantText = () => {
+		const flushResponse = (tone) => {
 			const now = Date.now();
 			if (now - lastRenderTime >= RENDER_THROTTLE_MS) {
-				responseContainer.innerHTML = parseMarkdown(responseText);
+				const el = responseElements[tone];
+				el.responseContainer.innerHTML = parseMarkdown(el.responseText);
 				chatMessages.scrollTop = chatMessages.scrollHeight;
 				lastRenderTime = now;
 			}
 		};
-		const flushAssistantTextImmediate = () => {
-			responseContainer.innerHTML = parseMarkdown(responseText);
+		const flushResponseImmediate = (tone) => {
+			const el = responseElements[tone];
+			el.responseContainer.innerHTML = parseMarkdown(el.responseText);
 			chatMessages.scrollTop = chatMessages.scrollHeight;
 			lastRenderTime = Date.now();
 		};
-		const flushThinkingText = () => {
-			thinkingContentEl.textContent = thinkingText;
+		const flushThinking = (tone) => {
+			const el = responseElements[tone];
+			el.thinkingContentEl.textContent = el.thinkingText;
 			// Show thinking section if we have content
-			if (thinkingText.length > 0) {
-				thinkingSection.style.display = "block";
+			if (el.thinkingText.length > 0) {
+				el.thinkingSection.style.display = "block";
 			}
 		};
 
@@ -320,26 +351,20 @@ async function sendMessage() {
 					}
 					try {
 						const jsonData = JSON.parse(data);
+						const tone = jsonData.tone;
+						
+						if (!tone || !responseElements[tone]) continue;
 						
 						// Handle thinking content
 						if (jsonData.thinking) {
-							thinkingText += jsonData.thinking;
-							flushThinkingText();
+							responseElements[tone].thinkingText += jsonData.thinking;
+							flushThinking(tone);
 						}
 						
 						// Handle response content
-						let content = "";
-						if (
-							typeof jsonData.response === "string" &&
-							jsonData.response.length > 0
-						) {
-							content = jsonData.response;
-						} else if (jsonData.choices?.[0]?.delta?.content) {
-							content = jsonData.choices[0].delta.content;
-						}
-						if (content) {
-							responseText += content;
-							flushAssistantText();
+						if (jsonData.response) {
+							responseElements[tone].responseText += jsonData.response;
+							flushResponse(tone);
 						}
 					} catch (e) {
 						console.error("Error parsing SSE data as JSON:", e, data);
@@ -360,26 +385,20 @@ async function sendMessage() {
 				}
 				try {
 					const jsonData = JSON.parse(data);
+					const tone = jsonData.tone;
+					
+					if (!tone || !responseElements[tone]) continue;
 					
 					// Handle thinking content
 					if (jsonData.thinking) {
-						thinkingText += jsonData.thinking;
-						flushThinkingText();
+						responseElements[tone].thinkingText += jsonData.thinking;
+						flushThinking(tone);
 					}
 					
 					// Handle response content
-					let content = "";
-					if (
-						typeof jsonData.response === "string" &&
-						jsonData.response.length > 0
-					) {
-						content = jsonData.response;
-					} else if (jsonData.choices?.[0]?.delta?.content) {
-						content = jsonData.choices[0].delta.content;
-					}
-					if (content) {
-						responseText += content;
-						flushAssistantText();
+					if (jsonData.response) {
+						responseElements[tone].responseText += jsonData.response;
+						flushResponse(tone);
 					}
 				} catch (e) {
 					console.error("Error parsing SSE data as JSON:", e, data);
@@ -390,12 +409,14 @@ async function sendMessage() {
 			}
 		}
 
-		// Final render with complete content
-		flushAssistantTextImmediate();
+		// Final render with complete content for all tones
+		tones.forEach((tone) => {
+			flushResponseImmediate(tone);
+		});
 
-		// Add completed response to chat history
-		if (responseText.length > 0) {
-			chatHistory.push({ role: "assistant", content: responseText });
+		// Add completed responses to chat history (use professional as the main response)
+		if (responseElements['professional'].responseText.length > 0) {
+			chatHistory.push({ role: "assistant", content: responseElements['professional'].responseText });
 		}
 	} catch (error) {
 		console.error("Error:", error);

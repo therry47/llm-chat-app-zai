@@ -169,6 +169,66 @@
 				font-style: italic;
 			}
 
+			/* Multi-response container for displaying 3 tones side by side */
+			.multi-response-container {
+				display: flex;
+				gap: 1rem;
+				margin-bottom: 1rem;
+				width: 100%;
+			}
+
+			.tone-response {
+				flex: 1;
+				min-width: 0; /* Allow flex items to shrink below content size */
+				border: 1px solid var(--border-color);
+				border-radius: 8px;
+				padding: 0.75rem;
+				background-color: var(--assistant-msg-bg);
+			}
+
+			.friendly-response {
+				border-color: #10b981;
+			}
+
+			.rude-response {
+				border-color: #ef4444;
+			}
+
+			.professional-response {
+				border-color: #3b82f6;
+			}
+
+			.tone-header {
+				font-weight: 600;
+				font-size: 0.875rem;
+				margin-bottom: 0.5rem;
+				padding-bottom: 0.5rem;
+				border-bottom: 1px solid var(--border-color);
+			}
+
+			.friendly-response .tone-header {
+				color: #10b981;
+			}
+
+			.rude-response .tone-header {
+				color: #ef4444;
+			}
+
+			.professional-response .tone-header {
+				color: #3b82f6;
+			}
+
+			.tone-response .response-content {
+				font-size: 0.9rem;
+			}
+
+			/* Responsive layout for smaller screens */
+			@media (max-width: 768px) {
+				.multi-response-container {
+					flex-direction: column;
+				}
+			}
+
 			.thinking-section {
 				margin-bottom: 0.5rem;
 				border: 1px solid var(--border-color);
