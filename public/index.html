@@ -75,6 +75,61 @@
 				overflow-wrap: anywhere;
 			}
 
+			.thinking-section {
+				margin-bottom: 0.5rem;
+				border: 1px solid var(--border-color);
+				border-radius: 4px;
+				background-color: rgba(246, 130, 31, 0.05);
+			}
+
+			.thinking-header {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 0.5rem 0.75rem;
+				cursor: pointer;
+				user-select: none;
+				background-color: rgba(246, 130, 31, 0.1);
+				border-radius: 4px 4px 0 0;
+			}
+
+			.thinking-header:hover {
+				background-color: rgba(246, 130, 31, 0.15);
+			}
+
+			.thinking-title {
+				font-size: 0.875rem;
+				font-weight: 500;
+				color: var(--primary-color);
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+			}
+
+			.thinking-toggle {
+				font-size: 0.75rem;
+				color: var(--text-light);
+				transition: transform 0.2s;
+			}
+
+			.thinking-toggle.collapsed {
+				transform: rotate(-90deg);
+			}
+
+			.thinking-content {
+				padding: 0.75rem;
+				font-size: 0.875rem;
+				color: var(--text-light);
+				font-style: italic;
+				max-height: 300px;
+				overflow-y: auto;
+				border-top: 1px solid var(--border-color);
+			}
+
+			.thinking-content.collapsed {
+				display: none;
+			}
+
 			.user-message {
 				background-color: var(--user-msg-bg);
 				align-self: flex-end;

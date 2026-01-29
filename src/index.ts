@@ -89,7 +89,17 @@ async function handleChatRequest(
 			async start(controller) {
 				try {
 					for await (const chunk of stream) {
-						const content = chunk.choices[0]?.delta?.content || "";
+						const delta = chunk.choices[0]?.delta as any;
+						
+						// Handle thinking content (reasoning tokens)
+						const thinking = delta?.reasoning_content || "";
+						if (thinking) {
+							const data = `data: ${JSON.stringify({ thinking: thinking })}\n\n`;
+							controller.enqueue(encoder.encode(data));
+						}
+						
+						// Handle regular response content
+						const content = delta?.content || "";
 						if (content) {
 							const data = `data: ${JSON.stringify({ response: content })}\n\n`;
 							controller.enqueue(encoder.encode(data));

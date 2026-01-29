@@ -68,9 +68,43 @@ async function sendMessage() {
 		// Create new assistant response element
 		const assistantMessageEl = document.createElement("div");
 		assistantMessageEl.className = "message assistant-message";
-		assistantMessageEl.innerHTML = "<p></p>";
+		
+		// Create thinking section (initially hidden)
+		const thinkingSection = document.createElement("div");
+		thinkingSection.className = "thinking-section";
+		thinkingSection.style.display = "none";
+		thinkingSection.innerHTML = `
+			<div class="thinking-header">
+				<div class="thinking-title">
+					<span>💭</span>
+					<span>Thinking process</span>
+				</div>
+				<span class="thinking-toggle">▼</span>
+			</div>
+			<div class="thinking-content"></div>
+		`;
+		
+		// Create response paragraph
+		const responseParagraph = document.createElement("p");
+		
+		// Assemble message
+		assistantMessageEl.appendChild(thinkingSection);
+		assistantMessageEl.appendChild(responseParagraph);
 		chatMessages.appendChild(assistantMessageEl);
-		const assistantTextEl = assistantMessageEl.querySelector("p");
+		
+		const thinkingContentEl = thinkingSection.querySelector(".thinking-content");
+		const thinkingToggleEl = thinkingSection.querySelector(".thinking-toggle");
+		const thinkingHeaderEl = thinkingSection.querySelector(".thinking-header");
+		
+		// Add click handler for collapsing/expanding thinking
+		thinkingHeaderEl.addEventListener("click", () => {
+			thinkingContentEl.classList.toggle("collapsed");
+			thinkingToggleEl.classList.toggle("collapsed");
+		});
+		
+		// Start with thinking collapsed
+		thinkingContentEl.classList.add("collapsed");
+		thinkingToggleEl.classList.add("collapsed");
 
 		// Scroll to bottom
 		chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -98,10 +132,18 @@ async function sendMessage() {
 		const reader = response.body.getReader();
 		const decoder = new TextDecoder();
 		let responseText = "";
+		let thinkingText = "";
 		let buffer = "";
 		const flushAssistantText = () => {
-			assistantTextEl.textContent = responseText;
+			responseParagraph.textContent = responseText;
 			chatMessages.scrollTop = chatMessages.scrollHeight;
+		};
+		const flushThinkingText = () => {
+			thinkingContentEl.textContent = thinkingText;
+			// Show thinking section if we have content
+			if (thinkingText.length > 0) {
+				thinkingSection.style.display = "block";
+			}
 		};
 
 		let sawDone = false;
@@ -117,7 +159,14 @@ async function sendMessage() {
 					}
 					try {
 						const jsonData = JSON.parse(data);
-						// Handle both Workers AI format (response) and OpenAI format (choices[0].delta.content)
+						
+						// Handle thinking content
+						if (jsonData.thinking) {
+							thinkingText += jsonData.thinking;
+							flushThinkingText();
+						}
+						
+						// Handle response content
 						let content = "";
 						if (
 							typeof jsonData.response === "string" &&
@@ -150,7 +199,14 @@ async function sendMessage() {
 				}
 				try {
 					const jsonData = JSON.parse(data);
-					// Handle both Workers AI format (response) and OpenAI format (choices[0].delta.content)
+					
+					// Handle thinking content
+					if (jsonData.thinking) {
+						thinkingText += jsonData.thinking;
+						flushThinkingText();
+					}
+					
+					// Handle response content
 					let content = "";
 					if (
 						typeof jsonData.response === "string" &&
