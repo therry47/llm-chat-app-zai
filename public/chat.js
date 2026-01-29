@@ -20,6 +20,64 @@ let chatHistory = [
 ];
 let isProcessing = false;
 
+/**
+ * Parse markdown to HTML safely
+ */
+function parseMarkdown(text) {
+	// Escape HTML to prevent XSS
+	function escapeHtml(unsafe) {
+		return unsafe
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&#039;");
+	}
+	
+	// Parse markdown syntax
+	let html = escapeHtml(text);
+	
+	// Code blocks (must be before inline code)
+	html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, function(match, lang, code) {
+		return '<pre><code>' + code.trim() + '</code></pre>';
+	});
+	
+	// Inline code
+	html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+	
+	// Bold
+	html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+	html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+	
+	// Italic
+	html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+	html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+	
+	// Headers
+	html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+	html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+	html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+	
+	// Links
+	html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+	
+	// Unordered lists
+	html = html.replace(/^\* (.+)$/gim, '<li>$1</li>');
+	html = html.replace(/^- (.+)$/gim, '<li>$1</li>');
+	html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+	
+	// Ordered lists
+	html = html.replace(/^\d+\. (.+)$/gim, '<li>$1</li>');
+	
+	// Blockquotes
+	html = html.replace(/^> (.+)$/gim, '<blockquote>$1</blockquote>');
+	
+	// Line breaks
+	html = html.replace(/\n/g, '<br>');
+	
+	return html;
+}
+
 // Auto-resize textarea as user types
 userInput.addEventListener("input", function () {
 	this.style.height = "auto";
@@ -84,12 +142,13 @@ async function sendMessage() {
 			<div class="thinking-content"></div>
 		`;
 		
-		// Create response paragraph
-		const responseParagraph = document.createElement("p");
+		// Create response container (for markdown)
+		const responseContainer = document.createElement("div");
+		responseContainer.className = "response-content";
 		
 		// Assemble message
 		assistantMessageEl.appendChild(thinkingSection);
-		assistantMessageEl.appendChild(responseParagraph);
+		assistantMessageEl.appendChild(responseContainer);
 		chatMessages.appendChild(assistantMessageEl);
 		
 		const thinkingContentEl = thinkingSection.querySelector(".thinking-content");
@@ -135,7 +194,7 @@ async function sendMessage() {
 		let thinkingText = "";
 		let buffer = "";
 		const flushAssistantText = () => {
-			responseParagraph.textContent = responseText;
+			responseContainer.innerHTML = parseMarkdown(responseText);
 			chatMessages.scrollTop = chatMessages.scrollHeight;
 		};
 		const flushThinkingText = () => {
@@ -257,7 +316,18 @@ async function sendMessage() {
 function addMessageToChat(role, content) {
 	const messageEl = document.createElement("div");
 	messageEl.className = `message ${role}-message`;
-	messageEl.innerHTML = `<p>${content}</p>`;
+	
+	// Use markdown for assistant messages, plain text for user messages
+	if (role === "assistant") {
+		const contentDiv = document.createElement("div");
+		contentDiv.innerHTML = parseMarkdown(content);
+		messageEl.appendChild(contentDiv);
+	} else {
+		const p = document.createElement("p");
+		p.textContent = content;
+		messageEl.appendChild(p);
+	}
+	
 	chatMessages.appendChild(messageEl);
 
 	// Scroll to bottom

@@ -75,6 +75,95 @@
 				overflow-wrap: anywhere;
 			}
 
+			/* Markdown styling */
+			.message h1,
+			.message h2,
+			.message h3,
+			.message h4,
+			.message h5,
+			.message h6 {
+				margin-top: 0.5rem;
+				margin-bottom: 0.5rem;
+				font-weight: 600;
+			}
+
+			.message h1 { font-size: 1.5rem; }
+			.message h2 { font-size: 1.3rem; }
+			.message h3 { font-size: 1.1rem; }
+
+			.message ul,
+			.message ol {
+				margin: 0.5rem 0;
+				padding-left: 1.5rem;
+			}
+
+			.message li {
+				margin: 0.25rem 0;
+			}
+
+			.message code {
+				background-color: rgba(0, 0, 0, 0.05);
+				padding: 0.2rem 0.4rem;
+				border-radius: 3px;
+				font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+				font-size: 0.9em;
+			}
+
+			.message pre {
+				background-color: rgba(0, 0, 0, 0.05);
+				padding: 0.75rem;
+				border-radius: 4px;
+				overflow-x: auto;
+				margin: 0.5rem 0;
+			}
+
+			.message pre code {
+				background-color: transparent;
+				padding: 0;
+			}
+
+			.message blockquote {
+				border-left: 3px solid var(--primary-color);
+				margin: 0.5rem 0;
+				padding-left: 1rem;
+				color: var(--text-light);
+			}
+
+			.message a {
+				color: var(--primary-color);
+				text-decoration: none;
+			}
+
+			.message a:hover {
+				text-decoration: underline;
+			}
+
+			.message table {
+				border-collapse: collapse;
+				width: 100%;
+				margin: 0.5rem 0;
+			}
+
+			.message th,
+			.message td {
+				border: 1px solid var(--border-color);
+				padding: 0.5rem;
+				text-align: left;
+			}
+
+			.message th {
+				background-color: rgba(0, 0, 0, 0.05);
+				font-weight: 600;
+			}
+
+			.message strong {
+				font-weight: 600;
+			}
+
+			.message em {
+				font-style: italic;
+			}
+
 			.thinking-section {
 				margin-bottom: 0.5rem;
 				border: 1px solid var(--border-color);
