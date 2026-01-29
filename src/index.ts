@@ -1,17 +1,18 @@
 /**
  * LLM Chat Application Template
  *
- * A simple chat application using Cloudflare Workers AI.
+ * A simple chat application using OpenAI API.
  * This template demonstrates how to implement an LLM-powered chat interface with
  * streaming responses using Server-Sent Events (SSE).
  *
  * @license MIT
  */
+import OpenAI from "openai";
 import { Env, ChatMessage } from "./types";
 
-// Model ID for Workers AI model
-// https://developers.cloudflare.com/workers-ai/models/
-const MODEL_ID = "@cf/meta/llama-3.1-8b-instruct-fp8";
+// OpenAI API Configuration
+const OPENAI_API_BASE = "https://api.z.ai/api/coding/paas/v4";
+const MODEL_ID = "glm-4.7";
 
 // Default system prompt
 const SYSTEM_PROMPT =
@@ -67,24 +68,71 @@ async function handleChatRequest(
 			messages.unshift({ role: "system", content: SYSTEM_PROMPT });
 		}
 
-		const stream = await env.AI.run(
-			MODEL_ID,
-			{
-				messages,
-				max_tokens: 1024,
-				stream: true,
-			},
-			{
-				// Uncomment to use AI Gateway
-				// gateway: {
-				//   id: "YOUR_GATEWAY_ID", // Replace with your AI Gateway ID
-				//   skipCache: false,      // Set to true to bypass cache
-				//   cacheTtl: 3600,        // Cache time-to-live in seconds
-				// },
-			},
-		);
+		// Validate API key is configured
+		const apiKey = env.Z_AI_API_KEY;
+		if (!apiKey || apiKey.trim() === "") {
+			return new Response(
+				JSON.stringify({ error: "Server configuration error: Z_AI_API_KEY is not set" }),
+				{
+					status: 500,
+					headers: { "content-type": "application/json" },
+				},
+			);
+		}
 
-		return new Response(stream, {
+		// Initialize OpenAI client with API key from environment
+		const openai = new OpenAI({
+			apiKey,
+			baseURL: OPENAI_API_BASE,
+		});
+
+		// Create AbortController for cleanup on client disconnect
+		const abortController = new AbortController();
+		
+		// Create streaming chat completion
+		const stream = await openai.chat.completions.create({
+			model: MODEL_ID,
+			messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
+			max_tokens: 1024,
+			stream: true,
+		}, {
+			signal: abortController.signal,
+		});
+
+		// Convert OpenAI stream to SSE format
+		const encoder = new TextEncoder();
+		const readable = new ReadableStream({
+			async start(controller) {
+				try {
+					for await (const chunk of stream) {
+						const delta = chunk.choices[0]?.delta as any;
+						
+						// Handle thinking content (reasoning tokens)
+						const thinking = delta?.reasoning_content || "";
+						if (thinking) {
+							const data = `data: ${JSON.stringify({ thinking: thinking })}\n\n`;
+							controller.enqueue(encoder.encode(data));
+						}
+						
+						// Handle regular response content
+						const content = delta?.content || "";
+						if (content) {
+							const data = `data: ${JSON.stringify({ response: content })}\n\n`;
+							controller.enqueue(encoder.encode(data));
+						}
+					}
+					controller.close();
+				} catch (error) {
+					controller.error(error);
+				}
+			},
+			cancel() {
+				// Cleanup: abort upstream request when client disconnects
+				abortController.abort();
+			},
+		});
+
+		return new Response(readable, {
 			headers: {
 				"content-type": "text/event-stream; charset=utf-8",
 				"cache-control": "no-cache",

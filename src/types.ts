@@ -4,14 +4,14 @@
 
 export interface Env {
 	/**
-	 * Binding for the Workers AI API.
-	 */
-	AI: Ai;
-
-	/**
 	 * Binding for static assets.
 	 */
 	ASSETS: { fetch: (request: Request) => Promise<Response> };
+	
+	/**
+	 * Z.AI API Key secret from Cloudflare Worker environment.
+	 */
+	Z_AI_API_KEY: string;
 }
 
 /**
