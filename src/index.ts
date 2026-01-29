@@ -12,18 +12,11 @@ import { Env, ChatMessage } from "./types";
 
 // OpenAI API Configuration
 const OPENAI_API_BASE = "https://api.z.ai/api/coding/paas/v4";
-const OPENAI_API_KEY = "8e8739cde3d64a5785677c21c8743aa0.l1wPaX8Ukl2dB7ib";
 const MODEL_ID = "glm-4.7";
 
 // Default system prompt
 const SYSTEM_PROMPT =
 	"You are a helpful, friendly assistant. Provide concise and accurate responses.";
-
-// Initialize OpenAI client (singleton)
-const openai = new OpenAI({
-	apiKey: OPENAI_API_KEY,
-	baseURL: OPENAI_API_BASE,
-});
 
 export default {
 	/**
@@ -74,6 +67,12 @@ async function handleChatRequest(
 		if (!messages.some((msg) => msg.role === "system")) {
 			messages.unshift({ role: "system", content: SYSTEM_PROMPT });
 		}
+
+		// Initialize OpenAI client with API key from environment
+		const openai = new OpenAI({
+			apiKey: env.Z_AI_API_KEY,
+			baseURL: OPENAI_API_BASE,
+		});
 
 		// Create streaming chat completion
 		const stream = await openai.chat.completions.create({

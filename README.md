@@ -54,6 +54,24 @@ This template demonstrates how to build an AI-powered chat interface using Cloud
    npm run cf-typegen
    ```
 
+4. Configure the Z.AI API Key secret:
+
+   The application requires a Cloudflare Worker secret named `Z_AI_API_KEY` containing your Z.AI API key.
+   
+   **For production deployment:**
+   - Set the secret via the Cloudflare dashboard: Workers & Pages > Your Worker > Settings > Variables and Secrets
+   - Or use the Wrangler CLI:
+     ```bash
+     wrangler secret put Z_AI_API_KEY
+     ```
+   
+   **For local development:**
+   - Create a `.dev.vars` file in the project root:
+     ```
+     Z_AI_API_KEY=your_api_key_here
+     ```
+   - Note: `.dev.vars` is already in `.gitignore` to prevent accidental commits
+
 ### Development
 
 Start a local development server:
